@@ -1,6 +1,6 @@
 name: MinecartLauncher
 main: com.nickeddy.MinecartLauncher.MinecartLauncher
-version: .1
+version: .2
 commands:
     launch:
         description: Launches a minecart with the player in it going the direction they are facing.

@@ -3,6 +3,7 @@ package com.nickeddy.MinecartLauncher;
 import java.util.HashSet;
 import java.util.logging.Logger;
 
+import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
@@ -10,7 +11,7 @@ import org.bukkit.entity.Minecart;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Vehicle;
 import org.bukkit.event.Event;
-import org.bukkit.event.vehicle.VehicleCollisionEvent;
+import org.bukkit.event.vehicle.VehicleEntityCollisionEvent;
 import org.bukkit.event.vehicle.VehicleExitEvent;
 import org.bukkit.event.vehicle.VehicleListener;
 import org.bukkit.plugin.PluginManager;
@@ -30,6 +31,8 @@ public class MinecartLauncher extends JavaPlugin {
 		PluginManager pluginManager = this.getServer().getPluginManager();
 		pluginManager.registerEvent(Event.Type.VEHICLE_EXIT,
 				mclVehicleListener, Event.Priority.Normal, this);
+		pluginManager.registerEvent(Event.Type.VEHICLE_COLLISION_ENTITY,
+				mclVehicleListener, Event.Priority.Normal, this);
 	}
 
 	public void onDisable() {
@@ -40,40 +43,22 @@ public class MinecartLauncher extends JavaPlugin {
 
 	public boolean onCommand(CommandSender sender, Command command,
 			String commandLabel, String[] args) {
+
+		/*
+		 * ***********Launch************
+		 */
 		if (command.getName().equalsIgnoreCase("launch")) {
 			if (canLaunch(sender)) {
 				Player player = (Player) sender;
-				// TODO
 				World world = player.getWorld();
 				int blockPlayerIsOn = world.getBlockTypeIdAt(player
 						.getLocation());
 				// if block player is on is a rail, powered rail, or detector
-				// rail
+				// rail...
 				if (blockPlayerIsOn == 27 || blockPlayerIsOn == 28
 						|| blockPlayerIsOn == 66) {
 
-					Vector v = player.getLocation().getDirection().clone();
-
-					double playerRotation = (player.getLocation().getYaw() - 90.0D) % 360.0D;
-					if (playerRotation < 0.0D) {
-						playerRotation += 360.0D;
-					}
-					// calculate north/west/east/south
-					if (playerRotation <= 45.0 || playerRotation > 315.0) {
-						// send north
-						v.setX(-8);
-					} else if (playerRotation > 45.0 && playerRotation <= 135.0) {
-						// send east
-						v.setZ(-8);
-					} else if (playerRotation > 135.0
-							&& playerRotation <= 225.0) {
-						// send south
-						v.setX(8);
-					} else if (playerRotation > 225.0
-							&& playerRotation <= 315.0) {
-						// send west
-						v.setZ(8);
-					}
+					Vector v = getLaunchDirection(player.getLocation());
 
 					// spawn a minecart and put the player in it, and then set
 					// the velocity.
@@ -84,8 +69,7 @@ public class MinecartLauncher extends JavaPlugin {
 					this.minecarts.add(minecart);
 					return true;
 				} else {
-					sender
-							.sendMessage("/launch requires that you be on a minecart rail!");
+					sender.sendMessage("You must be on a minecart rail!");
 					return false;
 				}
 			} else {
@@ -95,6 +79,31 @@ public class MinecartLauncher extends JavaPlugin {
 		} else {
 			return false;
 		}
+	}
+
+	private Vector getLaunchDirection(Location location) {
+		Vector v = location.getDirection().clone();
+
+		double rotation = (location.getYaw() - 90.0D) % 360.0D;
+		if (rotation < 0.0D) {
+			rotation += 360.0D;
+		}
+		// calculate north/west/east/south
+		if (rotation <= 45.0 || rotation > 315.0) {
+			// send north
+			v.setX(-8);
+		} else if (rotation > 45.0 && rotation <= 135.0) {
+			// send east
+			v.setZ(-8);
+		} else if (rotation > 135.0 && rotation <= 225.0) {
+			// send south
+			v.setX(8);
+		} else if (rotation > 225.0 && rotation <= 315.0) {
+			// send west
+			v.setZ(8);
+		}
+
+		return v;
 	}
 
 	private boolean canLaunch(CommandSender sender) {
@@ -108,20 +117,36 @@ public class MinecartLauncher extends JavaPlugin {
 			this.launcher = launcher;
 		}
 
-		public void onVehicleCollision(VehicleCollisionEvent event) {
-			if (event.getVehicle() instanceof Minecart) {
+		@Override
+		public void onVehicleEntityCollision(VehicleEntityCollisionEvent event) {
+			if (event.getVehicle() instanceof Minecart
+					&& event.getEntity() instanceof Minecart) {
 				// TODO prevent minecart collisions!
+				event.setCollisionCancelled(true);
+				event.setCancelled(true);
+
+				Location vehicleLocation = event.getVehicle().getLocation()
+						.clone();
+				Location entityLocation = event.getEntity().getLocation()
+						.clone();
+
+				Vector vehicleVector = getLaunchDirection(vehicleLocation);
+				Vector entityVector = getLaunchDirection(entityLocation);
+
+				event.getEntity().teleport(vehicleLocation);
+				event.getVehicle().teleport(entityLocation);
+				event.getVehicle().setVelocity(vehicleVector);
+				event.getEntity().setVelocity(entityVector);
+
 			}
 		}
 
 		@Override
 		public void onVehicleExit(VehicleExitEvent event) {
 			Vehicle vehicle = event.getVehicle();
-			if (vehicle instanceof Minecart) {
-				if (launcher.minecarts.contains(vehicle)) {
-					vehicle.remove();
-					launcher.minecarts.remove(vehicle);
-				}
+			if (launcher.minecarts.contains(vehicle)) {
+				vehicle.remove();
+				launcher.minecarts.remove(vehicle);
 			}
 		}
 	}
